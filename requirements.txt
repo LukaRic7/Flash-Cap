@@ -1,0 +1,6 @@
+pyside6
+mss
+keyboard
+imageio
+opencv-python
+pillow
