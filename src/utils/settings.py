@@ -1,5 +1,6 @@
 import loggerric as lr
 import os, json
+from pathlib import Path
 
 class Settings:
     """
@@ -24,6 +25,42 @@ class Settings:
     # Keep track of the latest data as to not make too many open() calls
     _latest_data = None
 
+    # Default settings
+    _defaults = {
+        'hotkeys': {
+            'screenshot': 'ctrl+shift+s',
+            'windowed_screenshot': 'ctrl+shift+w',
+            'start_recording': 'ctrl+shift+r',
+            'stop_recording': 'ctrl+shift+t'
+        },
+        'recording': {
+            'fps': 30
+        },
+        'output': {
+            'directory': str(Path.home() / 'Videos' / 'FlashCap')
+        }
+    }
+
+    @staticmethod
+    def _load_data():
+        try:
+            with open(Settings._settings_path, 'r') as file:
+                data = json.load(file)
+        except FileNotFoundError:
+            data = Settings._defaults.copy()
+            with open(Settings._settings_path, 'w') as file:
+                json.dump(data, file, indent=4)
+        # Merge with defaults for missing keys
+        def merge_defaults(target, source):
+            for key, value in source.items():
+                if key not in target:
+                    target[key] = value
+                elif isinstance(value, dict) and isinstance(target[key], dict):
+                    merge_defaults(target[key], value)
+        merge_defaults(data, Settings._defaults)
+        Settings._latest_data = data
+        return data
+
     @staticmethod
     def get(*keys):
         """
@@ -38,20 +75,16 @@ class Settings:
 
         lr.Log.debug('<Settings> Reading:', '.'.join(keys))
 
-        with open(Settings._settings_path, 'r') as file:
-            data:dict = json.load(file)
+        data = Settings._load_data()
 
-            # Update cache
-            Settings._latest_data = data
+        for key in keys:
+            # If the key points to nothing, return empty
+            if data == None:
+                return
 
-            for key in keys:
-                # If the key points to nothing, return empty
-                if data == None:
-                    return
+            data = data.get(key)
 
-                data = data.get(key)
-
-            return data
+        return data
     
     def set(value, *keys) -> None:
         """
@@ -64,15 +97,7 @@ class Settings:
 
         lr.Log.debug('<Settings> Writing:', '.'.join(keys), f'= {value}')
 
-        # Grab the currently stored data from the cache, or read from the file
-        if Settings._latest_data:
-            data = Settings._latest_data
-        else:
-            try:
-                with open(Settings._settings_path, 'r') as file:
-                    data:dict = json.load(file)
-            except FileNotFoundError:
-                data = {}
+        data = Settings._load_data()
 
         # Create a pointer, as to not lose root reference (data)
         section = data

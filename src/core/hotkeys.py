@@ -1,6 +1,7 @@
 from typing import Callable
 import keyboard, threading
 from pynput import mouse
+import loggerric as lr
 
 from utils.settings import Settings
 
@@ -42,6 +43,7 @@ class HotkeyMouseListener:
         # Only call if both hotkey and LMB are active and not triggered yet
         if self.hotkey_active and self.lmb_pressed and not self.triggered:
             self.triggered = True  # Mark as triggered
+            lr.Log.debug('Callback')
             threading.Thread(target=self.callback, daemon=True).start()
 
 
@@ -53,3 +55,9 @@ def register_screenshot(callback: Callable) -> None:
 
 def register_windowed_screenshot(callback: Callable) -> None:
     HotkeyMouseListener(Settings.get('hotkeys', 'windowed_screenshot'), callback)
+
+def register_start_recording(callback: Callable) -> None:
+    keyboard.add_hotkey(Settings.get('hotkeys', 'start_recording'), callback)
+
+def register_stop_recording(callback: Callable) -> None:
+    keyboard.add_hotkey(Settings.get('hotkeys', 'stop_recording'), callback)

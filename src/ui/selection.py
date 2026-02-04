@@ -1,51 +1,60 @@
 from PySide6.QtWidgets import QWidget, QApplication
-from PySide6.QtCore import Qt, QRect, QPoint
+from PySide6.QtCore import Qt, QRect, QPoint, QTimer
 from PySide6.QtGui import QPainter, QColor, QPen
+from typing import Callable
+import loggerric as lr
 
 class RectSelector(QWidget):
-    def __init__(self):
+    def __init__(self, callback: Callable[[QRect], None]):
         super().__init__()
+        self.callback = callback
         self.start = QPoint()
-        self.end = QPoint()
+        self.pressed = False
 
-        # Topmost, frameless
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
-        self.setAttribute(Qt.WA_NoSystemBackground)
+        # Topmost, frameless, tool window, transparent for input
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool | Qt.WindowTransparentForInput)
         self.setAttribute(Qt.WA_TranslucentBackground)
-        self.setMouseTracking(True)
+        self.setStyleSheet("background-color: rgba(0, 180, 255, 50);")  # Semi-transparent blue
+        self.setWindowOpacity(0.5)
 
-        # Cover the full screen
-        self.setGeometry(QApplication.primaryScreen().geometry())
+        # Start with zero size
+        self.setGeometry(0, 0, 0, 0)
         self.show()
+        self.raise_()
 
-    def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            self.start = event.globalPosition().toPoint()
-            self.end = self.start
-            self.update()
+        # Timer to poll mouse position
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.update_selection)
+        self.timer.start(10)  # ~100 FPS
 
-    def mouseMoveEvent(self, event):
-        if event.buttons() & Qt.LeftButton:
-            self.end = event.globalPosition().toPoint()
-            self.update()
+    def update_selection(self):
+        # Poll mouse state
+        mouse_pos = QApplication.instance().cursor().pos()
+        lbutton_pressed = QApplication.mouseButtons() & Qt.LeftButton
 
-    def mouseReleaseEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            self.end = event.globalPosition().toPoint()
-            self.update()
-            self.close()  # Close overlay after release
+        if not self.pressed:
+            if lbutton_pressed:
+                self.start = mouse_pos
+                self.pressed = True
+                self.setGeometry(self.start.x(), self.start.y(), 0, 0)
+        else:
+            if lbutton_pressed:
+                x = min(self.start.x(), mouse_pos.x())
+                y = min(self.start.y(), mouse_pos.y())
+                w = abs(mouse_pos.x() - self.start.x())
+                h = abs(mouse_pos.y() - self.start.y())
+                self.setGeometry(x, y, w, h)
+            else:
+                # Released
+                x = min(self.start.x(), mouse_pos.x())
+                y = min(self.start.y(), mouse_pos.y())
+                w = abs(mouse_pos.x() - self.start.x())
+                h = abs(mouse_pos.y() - self.start.y())
+                rect = QRect(x, y, w, h)
+                self.callback(rect)
+                self.timer.stop()
+                self.close()
 
     def paintEvent(self, event):
-        # Clear background with fully transparent color
-        painter = QPainter(self)
-        painter.setCompositionMode(QPainter.CompositionMode_Source)
-        painter.fillRect(self.rect(), QColor(0, 0, 0, 0))
-
-        # Draw the selection rectangle
-        if self.start != self.end:
-            rect = QRect(self.start, self.end).normalized()
-            pen = QPen(QColor(0, 180, 255), 2, Qt.SolidLine)
-            brush = QColor(0, 180, 255, 50)
-            painter.setPen(pen)
-            painter.setBrush(brush)
-            painter.drawRect(rect)
+        # Not needed
+        pass
